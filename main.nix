@@ -17,5 +17,5 @@ builtins.toJSON (builtins.mapAttrs (name: pkg: let r = builtins.tryEval pkg; in 
 } else {}) (
     #pkgs //
     pkgs.python3Packages //
-    #pkgs.rPackages //
+    pkgs.rPackages //
     {}))

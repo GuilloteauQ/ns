@@ -1,17 +1,24 @@
 {
-  description = "A very basic flake";
+  description = "Flake for ns";
 
-  inputs = { nixpkgs.url = "github:nixos/nixpkgs/23.05"; };
+  inputs = {
+    # override this one with the `nixpkgs` that you want to query
+    nixpkgs.url = "github:nixos/nixpkgs/23.05";
+    # override this one only for the packages that build the packages
+    nixpkgs_fixed.url = "github:nixos/nixpkgs/23.05";
+  };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, nixpkgs_fixed }:
     let
       system = "x86_64-linux";
-      pkgs = import nixpkgs {
+      pkgs = import nixpkgs_fixed {
+        inherit system;
+      };
+      pkgs_ns = import nixpkgs {
         inherit system;
         config.allowBroken = true;
       };
     in {
-
       packages.${system} = rec {
         nixsearch_db = pkgs.stdenv.mkDerivation {
             name = "nixsearch_db";
@@ -30,23 +37,28 @@
             '';  
         };
                  
-        ns =     
-          pkgs.writers.writePython3Bin "ns" {
-            libraries = [ pkgs.python3Packages.sqlite-utils ];
-          } ''   
-          import os
-          import sqlite3
-
-          dbpath = "${nixsearch_create_db}/nix-search.db"
-          connection = sqlite3.connect(dbpath)
-          cursor = connection.cursor()
-          package = f"%{os.argv[1]}%"
-          rows = cursor.execute("SELECT * FROM packages WHERE name LIKE ? or description LIKE ? or longDescription LIKE ?", (package, package, package,)).fetchall()
-          for row in rows:
-              print("Package: {}\nVersion: {}\nDescription: {}\nLong Description:\n{}\n".format(*row))
+        ns = pkgs.stdenv.mkDerivation rec {
+          name = "ns";
+          version = nixpkgs.rev;
+          src = ./src;
+          nativeBuildInputs = with pkgs; [
+            gcc
+            pkg-config
+          ];
+          buildInputs = with pkgs; [
+            sqlite
+            nixsearch_db
+          ];
+          buildPhase = ''
+            mkdir -p $out/bin
+            g++ -DDB_PATH="${nixsearch_db}/nix-search.db" $(pkg-config --libs --cflags sqlite3) -o $out/bin/ns main.cpp -O3
           '';
+          installPhase = ''
+            echo pass
+          '';
+        };
         pkgs_json =
-          builtins.toFile "pkgs.json" (import ./main.nix { inherit pkgs; });
+          builtins.toFile "pkgs.json" (import ./main.nix { pkgs = pkgs_ns; });
         nixsearch_create_db =
           pkgs.writers.writePython3Bin "nixsearch_create_db" {
             libraries = [ pkgs.python3Packages.sqlite-utils ];
@@ -75,15 +87,14 @@
                 cur.executemany("INSERT INTO packages VALUES(?, ?, ?, ?)", to_insert)
                 con.commit()
           '';
-
       };
 
       devShells.${system} = {
         default = pkgs.mkShell {
           packages = with pkgs; [
-            #nix-eval-jobs
             (python3.withPackages (ps: with ps; [ sqlite-utils rich ]))
             sqlite
+            pkg-config
           ];
         };
       };
