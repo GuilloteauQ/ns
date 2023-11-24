@@ -4,7 +4,7 @@
 #define DB_PATH "nix-search.db"
 
 void print_package(sqlite3_stmt* row) {
-  printf("Package: %s\nVersion: %s\nDescription: %s\nLong Description:\n%s\n",
+  printf("Package: %s\nVersion: %s\nDescription: %s\nLong Description:\n%s\n\n",
          sqlite3_column_text(row, 0),
          sqlite3_column_text(row, 1),
          sqlite3_column_text(row, 2),

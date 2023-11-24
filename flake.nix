@@ -23,14 +23,15 @@
         nixsearch_db = pkgs.stdenv.mkDerivation {
             name = "nixsearch_db";
             version = nixpkgs.rev;
-            src = ./.;
+            src = ./src;
             buildInputs = [
                 nixsearch_create_db
+                #pkgs_json
             ];
             buildPhase = ''
                 mkdir -p $out
                 cd $out
-                nixsearch_create_db
+                ${nixsearch_create_db}/bin/nixsearch_create_db "${pkgs_json}"
             '';
             installPhase = ''
                 echo pass
@@ -65,9 +66,11 @@
           } ''
             import json
             import sqlite3
+            import sys
 
 
-            def get_tuple(name, x):
+            def get_tuple(x):
+                name = str(x["name"]) if "name" in x else ""
                 version = str(x["version"]) if "version" in x else ""
                 desc = x["description"] if "description" in x else ""
                 long_desc = x["longDescription"] if "longDescription" in x else ""
@@ -80,10 +83,11 @@
             version,\
             description,\
             longDescription)")
-            pkgs_json = "${pkgs_json}"
+            pkgs_json = sys.argv[1]
+            print(pkgs_json)
             with open(pkgs_json, "r") as pkgs:
                 data = json.loads(pkgs.read())
-                to_insert = [get_tuple(name, x) for (name, x) in data.items()]
+                to_insert = [get_tuple(x) for x in data.values()]
                 cur.executemany("INSERT INTO packages VALUES(?, ?, ?, ?)", to_insert)
                 con.commit()
           '';
